@@ -1,0 +1,330 @@
+openapi: 3.0.3
+info:
+  title: Jacklike Quiz API
+  version: "1.0.0"
+  description: |
+    HTTP + WebSocket API for the quiz game.
+    Admin endpoints are protected by Bearer token (ADMIN_TOKEN).
+servers:
+  - url: http://localhost:8080
+
+tags:
+  - name: Rooms
+  - name: Admin
+  - name: WebSocket
+
+components:
+  securitySchemes:
+    AdminBearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: token
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+      additionalProperties: true
+
+    CreateRoomResponse:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+          example: ABCD
+
+    RoomInfoResponse:
+      type: object
+      required: [code, phase]
+      properties:
+        code:
+          type: string
+          example: ABCD
+        phase:
+          type: string
+          description: Room phase value (enum defined in server code).
+          example: lobby
+
+    Option:
+      type: object
+      required: [id, text]
+      properties:
+        id:
+          type: string
+          description: Option ID (e.g. "A", "B", "C", "D")
+          example: A
+        text:
+          type: string
+          example: Paris
+
+    CreateQuestionInput:
+      type: object
+      required: [text, options, correctId, isActive]
+      properties:
+        text:
+          type: string
+          example: "Столица Франции?"
+        options:
+          type: array
+          minItems: 4
+          maxItems: 4
+          items:
+            $ref: "#/components/schemas/Option"
+        correctId:
+          type: string
+          example: B
+        isActive:
+          type: boolean
+          example: true
+
+    QuestionRow:
+      type: object
+      required: [id, text, options, correctId, isActive, createdAt]
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        text:
+          type: string
+          example: "Столица Франции?"
+        options:
+          type: array
+          items:
+            $ref: "#/components/schemas/Option"
+        correctId:
+          type: string
+          example: B
+        isActive:
+          type: boolean
+          example: true
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-01-16T14:12:00Z"
+
+    SetActiveReq:
+      type: object
+      required: [isActive]
+      properties:
+        isActive:
+          type: boolean
+          example: false
+
+paths:
+  /rooms:
+    post:
+      tags: [Rooms]
+      summary: Create a room
+      description: Creates a new room and returns its code.
+      responses:
+        "200":
+          description: Room created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateRoomResponse"
+        "405":
+          description: Method not allowed
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /rooms/{code}:
+    get:
+      tags: [Rooms]
+      summary: Get room basic info
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+          example: ABCD
+      responses:
+        "200":
+          description: Room info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoomInfoResponse"
+        "404":
+          description: Room not found
+          content:
+            text/plain:
+              schema:
+                type: string
+        "405":
+          description: Method not allowed
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /admin/questions:
+    get:
+      tags: [Admin]
+      summary: List questions
+      security:
+        - AdminBearerAuth: []
+      parameters:
+        - name: all
+          in: query
+          required: false
+          description: If set to 1, includes inactive questions.
+          schema:
+            type: string
+            enum: ["1"]
+      responses:
+        "200":
+          description: List of questions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/QuestionRow"
+        "401":
+          description: Unauthorized (missing/invalid token)
+          content:
+            text/plain:
+              schema:
+                type: string
+        "405":
+          description: Method not allowed
+          content:
+            text/plain:
+              schema:
+                type: string
+        "500":
+          description: Server error
+          content:
+            text/plain:
+              schema:
+                type: string
+
+    post:
+      tags: [Admin]
+      summary: Create question
+      security:
+        - AdminBearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateQuestionInput"
+      responses:
+        "200":
+          description: Created question
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuestionRow"
+        "400":
+          description: Bad request (invalid JSON or validation error)
+          content:
+            text/plain:
+              schema:
+                type: string
+        "401":
+          description: Unauthorized (missing/invalid token)
+          content:
+            text/plain:
+              schema:
+                type: string
+        "405":
+          description: Method not allowed
+          content:
+            text/plain:
+              schema:
+                type: string
+        "500":
+          description: Server error
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /admin/questions/{id}:
+    patch:
+      tags: [Admin]
+      summary: Set question active flag
+      security:
+        - AdminBearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+          example: 12
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetActiveReq"
+      responses:
+        "200":
+          description: Updated question
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuestionRow"
+        "400":
+          description: Bad request (bad id or bad json or validation error)
+          content:
+            text/plain:
+              schema:
+                type: string
+        "401":
+          description: Unauthorized (missing/invalid token)
+          content:
+            text/plain:
+              schema:
+                type: string
+        "405":
+          description: Method not allowed
+          content:
+            text/plain:
+              schema:
+                type: string
+        "500":
+          description: Server error
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /ws/{code}:
+    get:
+      tags: [WebSocket]
+      summary: WebSocket endpoint
+      description: |
+        Upgrade to WebSocket and join a room by code.
+
+        Connect to:
+        ws://localhost:8080/ws/{code}
+
+        First client message MUST be:
+        {"type":"join_room","payload":{"name":"YourName"}}
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+          example: ABCD
+      responses:
+        "101":
+          description: Switching Protocols (WebSocket upgrade)
+        "400":
+          description: Bad request
+        "404":
+          description: Room not found
